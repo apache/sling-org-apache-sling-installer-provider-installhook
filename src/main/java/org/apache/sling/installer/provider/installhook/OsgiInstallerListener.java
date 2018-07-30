@@ -29,9 +29,9 @@ import org.apache.sling.installer.api.tasks.TaskResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OsigInstallerListener implements InstallationListener {
+public class OsgiInstallerListener implements InstallationListener {
 
-	private static final Logger LOG = LoggerFactory.getLogger(OsigInstallerListener.class);
+	private static final Logger LOG = LoggerFactory.getLogger(OsgiInstallerListener.class);
 
 	private static final String ENTITY_ID_PREFIX_BUNDLE = "bundle:";
 	private static final String ENTITY_ID_PREFIX_CONFIG = "config:";
@@ -41,7 +41,7 @@ public class OsigInstallerListener implements InstallationListener {
 	private final Set<String> installedBundleSymbolicNames = new HashSet<>();
 	private final Set<String> installedConfigPids = new HashSet<>();
 
-	public OsigInstallerListener(Set<String> requiredBundleSymbolicNames, Set<String> requiredConfigPids) {
+	public OsgiInstallerListener(Set<String> requiredBundleSymbolicNames, Set<String> requiredConfigPids) {
 		this.requiredBundleSymbolicNames = requiredBundleSymbolicNames;
 		this.requiredConfigPids = requiredConfigPids;
 	}

@@ -131,7 +131,7 @@ public class OsgiInstallerHook implements InstallHook {
 				osgiInstallerServiceRef = getBundleContext().getServiceReference(OsgiInstaller.class);
 				OsgiInstaller osgiInstaller = getBundleContext().getService(osgiInstallerServiceRef);
 
-				OsigInstallerListener hookInstallationListener = new OsigInstallerListener(bundleSymbolicNamesToInstall,
+				OsgiInstallerListener hookInstallationListener = new OsgiInstallerListener(bundleSymbolicNamesToInstall,
 						configPidsToInstall);
 				hookInstallationListenerServiceRegistration = getBundleContext()
 						.registerService(InstallationListener.class, hookInstallationListener, null);
