@@ -21,6 +21,7 @@ package org.apache.sling.installer.provider.installhook;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,10 +46,12 @@ import org.apache.jackrabbit.vault.fs.io.ImportOptions;
 import org.apache.jackrabbit.vault.packaging.InstallContext;
 import org.apache.jackrabbit.vault.packaging.InstallHook;
 import org.apache.jackrabbit.vault.packaging.PackageException;
+import org.apache.jackrabbit.vault.packaging.PackageProperties;
 import org.apache.jackrabbit.vault.packaging.VaultPackage;
 import org.apache.sling.installer.api.InstallableResource;
 import org.apache.sling.installer.api.OsgiInstaller;
 import org.apache.sling.installer.api.event.InstallationListener;
+import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
@@ -77,28 +80,57 @@ public class OsgiInstallerHook implements InstallHook {
 
 	public static final String URL_SCHEME = "jcrinstall";
 	public static final String CONFIG_SUFFIX = ".config";
+	public static final String JAR_SUFFIX = ".jar";
+
+	public static final String PACKAGE_PROP_INSTALL_PATH_REGEX = "installPathRegex";
+
+	public static final String DOT = ".";
+	public static final int PRIORITY_INSTALL_HOOK = 2000;
 
 	private InstallHookLogger logger = new InstallHookLogger();
 
 	@Override
 	public void execute(InstallContext context) throws PackageException {
 
+		VaultPackage vaultPackage = context.getPackage();
+		PackageProperties packageProperties = vaultPackage.getProperties();
+		String installPathRegex = packageProperties.getProperty(PACKAGE_PROP_INSTALL_PATH_REGEX);
+
 		ServiceReference<OsgiInstaller> osgiInstallerServiceRef = null;
 		ServiceReference<ConfigurationAdmin> configAdminServiceRef = null;
+		ServiceReference<SlingSettingsService> slingSettingsServiceRef = null;
 		ServiceRegistration<InstallationListener> hookInstallationListenerServiceRegistration = null;
+
 		try {
 			switch (context.getPhase()) {
+			case PREPARE:
+				if (StringUtils.isBlank(installPathRegex)) {
+					throw new IllegalArgumentException(
+							"When using OSGi installer install hook for synchronous installation, the package property "
+									+ PACKAGE_PROP_INSTALL_PATH_REGEX + " has to be provided.");
+				}
+				break;
 			case INSTALLED:
 				ImportOptions options = context.getOptions();
 				logger.setOptions(options);
-				VaultPackage vaultPackage = context.getPackage();
 
 				logger.log(getClass().getSimpleName() + " is active in " + vaultPackage.getId());
 
 				List<BundleInPackage> bundleResources = new ArrayList<>();
 				List<String> configResourcePaths = new ArrayList<>();
 				Archive archive = vaultPackage.getArchive();
-				collectResources(archive, archive.getRoot(), "", bundleResources, configResourcePaths);
+
+				configAdminServiceRef = getBundleContext().getServiceReference(ConfigurationAdmin.class);
+				ConfigurationAdmin confAdmin = (ConfigurationAdmin) getBundleContext()
+						.getService(configAdminServiceRef);
+
+				slingSettingsServiceRef = getBundleContext().getServiceReference(SlingSettingsService.class);
+				SlingSettingsService slingSettingsService = (SlingSettingsService) getBundleContext()
+						.getService(slingSettingsServiceRef);
+				Set<String> runModes = slingSettingsService.getRunModes();
+
+				collectResources(archive, archive.getRoot(), "", bundleResources, configResourcePaths, installPathRegex,
+						runModes);
 
 				logger.log("Bundles in package " + bundleResources);
 
@@ -113,10 +145,6 @@ public class OsgiInstallerHook implements InstallHook {
 
 				Set<String> bundleSymbolicNamesToInstall = getBundlesToInstall(bundleResources,
 						bundleVersionsBySymbolicId, session, installableResources);
-
-				configAdminServiceRef = getBundleContext().getServiceReference(ConfigurationAdmin.class);
-				ConfigurationAdmin confAdmin = (ConfigurationAdmin) getBundleContext()
-						.getService(configAdminServiceRef);
 
 				Set<String> configPidsToInstall = getConfigPidsToInstall(configResourcePaths, session,
 						installableResources, confAdmin);
@@ -140,7 +168,7 @@ public class OsgiInstallerHook implements InstallHook {
 				osgiInstaller.updateResources(URL_SCHEME,
 						installableResources.toArray(new InstallableResource[installableResources.size()]), null);
 
-				String maxWaitForOsgiInstallerInSecStr = vaultPackage.getProperties()
+				String maxWaitForOsgiInstallerInSecStr = packageProperties
 						.getProperty(PACKAGE_PROPERTY_MAX_WAIT_IN_SEC);
 				int maxWaitForOsgiInstallerInSec = maxWaitForOsgiInstallerInSecStr != null
 						? Integer.parseInt(maxWaitForOsgiInstallerInSecStr)
@@ -162,13 +190,16 @@ public class OsgiInstallerHook implements InstallHook {
 				break;
 			}
 		} catch (Exception e) {
-			throw new PackageException("Could not execute install hook to apply env vars: " + e, e);
+			throw new PackageException("Could not execute install hook to for synchronous installation: " + e, e);
 		} finally {
 			if (osgiInstallerServiceRef != null) {
 				getBundleContext().ungetService(osgiInstallerServiceRef);
 			}
 			if (configAdminServiceRef != null) {
 				getBundleContext().ungetService(configAdminServiceRef);
+			}
+			if (slingSettingsServiceRef != null) {
+				getBundleContext().ungetService(slingSettingsServiceRef);
 			}
 
 			if (hookInstallationListenerServiceRegistration != null) {
@@ -248,31 +279,58 @@ public class OsgiInstallerHook implements InstallHook {
 	}
 
 	private void collectResources(Archive archive, Entry entry, String dirPath, List<BundleInPackage> bundleResources,
-			List<String> configResources) {
+			List<String> configResources, String installPathRegex, Set<String> actualRunmodes) {
 		String entryName = entry.getName();
+		if(entryName.equals("META-INF")) {
+			return;
+		} 
 
-		if (entryName.endsWith(".jar") && dirPath.contains("/install")) {
+		String dirPathWithoutJcrRoot = StringUtils.substringAfter(dirPath, "/jcr_root");
+		String entryPath = dirPathWithoutJcrRoot + entryName;
+		String dirPathWithoutSlash = StringUtils.chomp(dirPathWithoutJcrRoot, "/");
 
-			try (InputStream entryInputStream = archive.getInputSource(entry).getByteStream();
-					JarInputStream jarInputStream = new JarInputStream(entryInputStream)) {
-				Manifest manifest = jarInputStream.getManifest();
-				String symbolicName = manifest.getMainAttributes().getValue(MANIFEST_BUNDLE_SYMBOLIC_NAME);
-				String version = manifest.getMainAttributes().getValue(MANIFEST_BUNDLE_VERSION);
-				String bundlePath = StringUtils.substringAfter(dirPath + entryName, "/jcr_root");
-				bundleResources.add(new BundleInPackage(bundlePath, symbolicName, version));
-			} catch (Exception e) {
-				throw new IllegalStateException(
-						"Could not read symbolic name and version from manifest of bundle " + entryName);
+		String dirPathWithoutRunmodes;
+		boolean runmodesMatch;
+		if (dirPathWithoutSlash.contains(DOT)) {
+			String[] bits = dirPathWithoutSlash.split("\\"+DOT, 2);
+			dirPathWithoutRunmodes = bits[0];
+			List<String> runmodesOfResource = Arrays.asList(bits[1].split("\\"+DOT));
+			Set<String> matchingRunmodes = new HashSet<String>(runmodesOfResource);
+			matchingRunmodes.retainAll(actualRunmodes);
+			LOG.debug("Entry with runmode(s): entryPath={} runmodesOfResource={} actualRunmodes={} matchingRunmodes={}", entryPath, runmodesOfResource, actualRunmodes, matchingRunmodes);
+			runmodesMatch = matchingRunmodes.size() == runmodesOfResource.size();
+			if (!runmodesMatch) {
+				logger.log("Skipping installation of  " + entryPath
+						+ " because the path is not matching all actual runmodes " + actualRunmodes);
 			}
+		} else {
+			dirPathWithoutRunmodes = dirPathWithoutSlash;
+			runmodesMatch = true;
 		}
 
-		if (entryName.endsWith(CONFIG_SUFFIX) && dirPath.contains("/config")) {
-			String configPath = StringUtils.substringAfter(dirPath + entryName, "/jcr_root");
-			configResources.add(configPath);
+		if (dirPathWithoutRunmodes.matches(installPathRegex) && runmodesMatch) {
+
+			if (entryName.endsWith(CONFIG_SUFFIX)) {
+				configResources.add(entryPath);
+			} else if (entryName.endsWith(JAR_SUFFIX)) {
+				try (InputStream entryInputStream = archive.getInputSource(entry).getByteStream();
+						JarInputStream jarInputStream = new JarInputStream(entryInputStream)) {
+					Manifest manifest = jarInputStream.getManifest();
+					String symbolicName = manifest.getMainAttributes().getValue(MANIFEST_BUNDLE_SYMBOLIC_NAME);
+					String version = manifest.getMainAttributes().getValue(MANIFEST_BUNDLE_VERSION);
+
+					bundleResources.add(new BundleInPackage(entryPath, symbolicName, version));
+				} catch (Exception e) {
+					throw new IllegalStateException(
+							"Could not read symbolic name and version from manifest of bundle " + entryName);
+				}
+			}
+
 		}
 
 		for (Entry child : entry.getChildren()) {
-			collectResources(archive, child, dirPath + entryName + "/", bundleResources, configResources);
+			collectResources(archive, child, dirPath + entryName + "/", bundleResources, configResources,
+					installPathRegex, actualRunmodes);
 		}
 	}
 
@@ -282,7 +340,7 @@ public class OsgiInstallerHook implements InstallHook {
 		final InputStream is = node.getProperty(JCR_CONTENT_DATA).getStream();
 		final Dictionary<String, Object> dict = new Hashtable<String, Object>();
 		dict.put(InstallableResource.INSTALLATION_HINT, node.getParent().getName());
-		return new InstallableResource(path, is, dict, digest, null, null);
+		return new InstallableResource(path, is, dict, digest, null, PRIORITY_INSTALL_HOOK);
 	}
 
 	// always get fresh bundle context to avoid "Dynamic class loader has already
@@ -294,7 +352,6 @@ public class OsgiInstallerHook implements InstallHook {
 			throw new IllegalStateException(
 					"The class " + InstallHook.class + " was not loaded through a bundle classloader");
 		}
-
 		BundleContext bundleContext = currentBundle.getBundleContext();
 		if (bundleContext == null) {
 			throw new IllegalStateException("Could not get bundle context for bundle " + currentBundle);
