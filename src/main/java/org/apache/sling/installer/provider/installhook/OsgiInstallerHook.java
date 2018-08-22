@@ -34,7 +34,6 @@ import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 
 import javax.jcr.Node;
-import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
@@ -68,26 +67,27 @@ public class OsgiInstallerHook implements InstallHook {
 	private static final Logger LOG = LoggerFactory.getLogger(OsgiInstallerHook.class);
 
 	private static final String PACKAGE_PROPERTY_MAX_WAIT_IN_SEC = "maxWaitForOsgiInstallerInSec";
-	private static final int DEFAULT_MAX_WAIT_IN_SEC = 120;
+	private static final String PACKAGE_PROP_INSTALL_PATH_REGEX = "installPathRegex";
 
-	private static final String MANIFEST_BUNDLE_SYMBOLIC_NAME = "Bundle-SymbolicName";
-	private static final String MANIFEST_BUNDLE_VERSION = "Bundle-Version";
-
-	private static final String JCR_CONTENT = "jcr:content";
-	private static final String JCR_CONTENT_DATA = JCR_CONTENT + "/jcr:data";
-	private static final String JCR_LAST_MODIFIED = "jcr:lastModified";
-	private static final String JCR_CONTENT_LAST_MODIFIED = JCR_CONTENT + "/" + JCR_LAST_MODIFIED;
+	public static final int DEFAULT_PRIORITY_INSTALL_HOOK = 2000;
+	private static final int DEFAULT_MAX_WAIT_IN_SEC = 60;
 
 	public static final String URL_SCHEME = "jcrinstall";
 	public static final String CONFIG_SUFFIX = ".config";
 	public static final String JAR_SUFFIX = ".jar";
 
-	public static final String PACKAGE_PROP_INSTALL_PATH_REGEX = "installPathRegex";
+	private static final String MANIFEST_BUNDLE_SYMBOLIC_NAME = "Bundle-SymbolicName";
+	private static final String MANIFEST_BUNDLE_VERSION = "Bundle-Version";
+	private static final String FOLDER_META_INF = "META-INF";
+
+	static final String JCR_CONTENT = "jcr:content";
+	static final String JCR_CONTENT_DATA = JCR_CONTENT + "/jcr:data";
+	static final String JCR_LAST_MODIFIED = "jcr:lastModified";
+	static final String JCR_CONTENT_LAST_MODIFIED = JCR_CONTENT + "/" + JCR_LAST_MODIFIED;
 
 	public static final String DOT = ".";
-	public static final int PRIORITY_INSTALL_HOOK = 2000;
 
-	private InstallHookLogger logger = new InstallHookLogger();
+	InstallHookLogger logger = new InstallHookLogger();
 
 	@Override
 	public void execute(InstallContext context) throws PackageException {
@@ -210,7 +210,7 @@ public class OsgiInstallerHook implements InstallHook {
 
 	private Set<String> getConfigPidsToInstall(List<String> configResourcePaths, Session session,
 			List<InstallableResource> installableResources, ConfigurationAdmin confAdmin)
-			throws IOException, InvalidSyntaxException, PathNotFoundException, RepositoryException {
+			throws IOException, InvalidSyntaxException, RepositoryException {
 		Set<String> configIdsToInstall = new HashSet<>();
 		for (String configResourcePath : configResourcePaths) {
 			boolean needsInstallation = false;
@@ -247,8 +247,7 @@ public class OsgiInstallerHook implements InstallHook {
 
 	private Set<String> getBundlesToInstall(List<BundleInPackage> bundleResources,
 			Map<String, String> bundleVersionsBySymbolicId, Session session,
-			List<InstallableResource> installableResources)
-			throws PathNotFoundException, RepositoryException, IOException {
+			List<InstallableResource> installableResources) throws RepositoryException, IOException {
 		Set<String> bundleSymbolicNamesToInstall = new HashSet<>();
 		Iterator<BundleInPackage> bundlesIt = bundleResources.iterator();
 		while (bundlesIt.hasNext()) {
@@ -278,37 +277,35 @@ public class OsgiInstallerHook implements InstallHook {
 		return bundleSymbolicNamesToInstall;
 	}
 
-	private void collectResources(Archive archive, Entry entry, String dirPath, List<BundleInPackage> bundleResources,
+	void collectResources(Archive archive, Entry entry, String dirPath, List<BundleInPackage> bundleResources,
 			List<String> configResources, String installPathRegex, Set<String> actualRunmodes) {
 		String entryName = entry.getName();
-		if(entryName.equals("META-INF")) {
+		if (entryName.equals(FOLDER_META_INF)) {
 			return;
-		} 
+		}
 
 		String dirPathWithoutJcrRoot = StringUtils.substringAfter(dirPath, "/jcr_root");
 		String entryPath = dirPathWithoutJcrRoot + entryName;
 		String dirPathWithoutSlash = StringUtils.chomp(dirPathWithoutJcrRoot, "/");
 
-		String dirPathWithoutRunmodes;
 		boolean runmodesMatch;
 		if (dirPathWithoutSlash.contains(DOT)) {
-			String[] bits = dirPathWithoutSlash.split("\\"+DOT, 2);
-			dirPathWithoutRunmodes = bits[0];
-			List<String> runmodesOfResource = Arrays.asList(bits[1].split("\\"+DOT));
+			String[] bits = dirPathWithoutSlash.split("\\" + DOT, 2);
+			List<String> runmodesOfResource = Arrays.asList(bits[1].split("\\" + DOT));
 			Set<String> matchingRunmodes = new HashSet<String>(runmodesOfResource);
 			matchingRunmodes.retainAll(actualRunmodes);
-			LOG.debug("Entry with runmode(s): entryPath={} runmodesOfResource={} actualRunmodes={} matchingRunmodes={}", entryPath, runmodesOfResource, actualRunmodes, matchingRunmodes);
+			LOG.debug("Entry with runmode(s): entryPath={} runmodesOfResource={} actualRunmodes={} matchingRunmodes={}",
+					entryPath, runmodesOfResource, actualRunmodes, matchingRunmodes);
 			runmodesMatch = matchingRunmodes.size() == runmodesOfResource.size();
 			if (!runmodesMatch) {
 				logger.log("Skipping installation of  " + entryPath
 						+ " because the path is not matching all actual runmodes " + actualRunmodes);
 			}
 		} else {
-			dirPathWithoutRunmodes = dirPathWithoutSlash;
 			runmodesMatch = true;
 		}
 
-		if (dirPathWithoutRunmodes.matches(installPathRegex) && runmodesMatch) {
+		if (entryPath.matches(installPathRegex) && runmodesMatch) {
 
 			if (entryName.endsWith(CONFIG_SUFFIX)) {
 				configResources.add(entryPath);
@@ -334,18 +331,18 @@ public class OsgiInstallerHook implements InstallHook {
 		}
 	}
 
-	private InstallableResource convert(final Node node, final String path) throws IOException, RepositoryException {
+	InstallableResource convert(final Node node, final String path) throws IOException, RepositoryException {
 		logger.log("Converting " + node + " at path " + path);
 		final String digest = String.valueOf(node.getProperty(JCR_CONTENT_LAST_MODIFIED).getDate().getTimeInMillis());
 		final InputStream is = node.getProperty(JCR_CONTENT_DATA).getStream();
 		final Dictionary<String, Object> dict = new Hashtable<String, Object>();
 		dict.put(InstallableResource.INSTALLATION_HINT, node.getParent().getName());
-		return new InstallableResource(path, is, dict, digest, null, PRIORITY_INSTALL_HOOK);
+		return new InstallableResource(path, is, dict, digest, null, DEFAULT_PRIORITY_INSTALL_HOOK);
 	}
 
 	// always get fresh bundle context to avoid "Dynamic class loader has already
 	// been deactivated" exceptions
-	public BundleContext getBundleContext() {
+	private BundleContext getBundleContext() {
 		// use the vault bundle to hook into the OSGi world
 		Bundle currentBundle = FrameworkUtil.getBundle(InstallHook.class);
 		if (currentBundle == null) {
@@ -378,16 +375,15 @@ public class OsgiInstallerHook implements InstallHook {
 
 	}
 
-	class InstallHookLogger {
+	static class InstallHookLogger {
 
-		private ImportOptions options;
+		private ProgressTrackerListener listener;
 
 		public void setOptions(ImportOptions options) {
-			this.options = options;
+			this.listener = options.getListener();
 		}
 
 		public void logError(Logger logger, String message, Throwable throwable) {
-			ProgressTrackerListener listener = options.getListener();
 			if (listener != null) {
 				listener.onMessage(ProgressTrackerListener.Mode.TEXT, "ERROR: " + message, "");
 			}
@@ -399,7 +395,6 @@ public class OsgiInstallerHook implements InstallHook {
 		}
 
 		public void log(Logger logger, String message) {
-			ProgressTrackerListener listener = options.getListener();
 			if (listener != null) {
 				listener.onMessage(ProgressTrackerListener.Mode.TEXT, message, "");
 				logger.debug(message);

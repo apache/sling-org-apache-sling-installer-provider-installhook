@@ -33,8 +33,8 @@ public class OsgiInstallerListener implements InstallationListener {
 
 	private static final Logger LOG = LoggerFactory.getLogger(OsgiInstallerListener.class);
 
-	private static final String ENTITY_ID_PREFIX_BUNDLE = "bundle:";
-	private static final String ENTITY_ID_PREFIX_CONFIG = "config:";
+	static final String ENTITY_ID_PREFIX_BUNDLE = "bundle:";
+	static final String ENTITY_ID_PREFIX_CONFIG = "config:";
 
 	private final Set<String> requiredBundleSymbolicNames;
 	private final Set<String> requiredConfigPids;
@@ -78,7 +78,7 @@ public class OsgiInstallerListener implements InstallationListener {
 		LOG.trace("requiredConfigPids: {}", requiredConfigPids);
 		LOG.trace("installedConfigPids: {}", installedConfigPids);
 		HashSet<String> configsLeftToInstall = new HashSet<String>(requiredConfigPids);
-		requiredConfigPids.removeAll(installedConfigPids);
+		configsLeftToInstall.removeAll(installedConfigPids);
 		LOG.debug("configsLeftToInstall: {}", configsLeftToInstall);
 
 		return bundlesLeftToInstall.isEmpty() && configsLeftToInstall.isEmpty();
