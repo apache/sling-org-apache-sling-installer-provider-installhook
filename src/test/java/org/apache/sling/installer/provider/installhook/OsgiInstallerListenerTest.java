@@ -18,12 +18,10 @@
 */
 package org.apache.sling.installer.provider.installhook;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -34,39 +32,54 @@ import org.junit.Test;
 
 public class OsgiInstallerListenerTest {
 
-	private OsgiInstallerListener osgiInstallerListener;
-	
-	@Test
-	public void testOsgiInstallerListener() {
-		
-		String bundleSymbolicId1 = "org.prj.bundle1";
-		String bundleSymbolicId2 = "org.prj.bundle2";
-		Set<String> requiredBundleSymbolicNames = new HashSet<String>(Arrays.asList(bundleSymbolicId1, bundleSymbolicId2));
-		String configPid1 = "org.prj.config1";
-		String configPid2 = "org.prj.config2";
-		Set<String> requiredConfigPids = new HashSet<String>(Arrays.asList(configPid1, configPid2));
+    private OsgiInstallerListener osgiInstallerListener;
 
-		osgiInstallerListener = new OsgiInstallerListener(requiredBundleSymbolicNames, requiredConfigPids);
+    @Test
+    public void testOsgiInstallerListener() {
 
-		assertFalse(osgiInstallerListener.isDone());
-		osgiInstallerListener.onEvent(getInstallationEventMock(OsgiInstallerListener.ENTITY_ID_PREFIX_BUNDLE + bundleSymbolicId1));
-		assertFalse(osgiInstallerListener.isDone());
-		osgiInstallerListener.onEvent(getInstallationEventMock(OsgiInstallerListener.ENTITY_ID_PREFIX_BUNDLE + bundleSymbolicId2));
-		assertFalse(osgiInstallerListener.isDone());
-		osgiInstallerListener.onEvent(getInstallationEventMock(OsgiInstallerListener.ENTITY_ID_PREFIX_CONFIG + configPid1));
-		assertFalse(osgiInstallerListener.isDone());
-		osgiInstallerListener.onEvent(getInstallationEventMock(OsgiInstallerListener.ENTITY_ID_PREFIX_CONFIG + configPid2));
-		assertTrue(osgiInstallerListener.isDone());
-		
-	}
-	
-	public InstallationEvent getInstallationEventMock(String entityId) {
-		InstallationEvent event = mock(InstallationEvent.class);
-		when(event.getType()).thenReturn(TYPE.PROCESSED);
-		TaskResource taskResource = mock(TaskResource.class);
-		when(event.getSource()).thenReturn(taskResource);
-		when(taskResource.getEntityId()).thenReturn(entityId);
-		return event;
-	}
+        Set<String> bundleUrlsToInstall = new HashSet<String>();
+        String bundleUrl1 = "jcrinstall:/apps/myproj/install/mybundle1.jar";
+        bundleUrlsToInstall.add(bundleUrl1);
+        String bundleUrl2 = "jcrinstall:/apps/myproj/install/mybundle2.jar";
+        bundleUrlsToInstall.add(bundleUrl2);
+
+        Set<String> configUrlsToInstall = new HashSet<String>();
+        String configUrl1 = "jcrinstall:/apps/myproj/config/conf1.config";
+        configUrlsToInstall.add(configUrl1);
+        String configUrl2 = "jcrinstall:/apps/myproj/config/conf2.config";
+        configUrlsToInstall.add(configUrl2);
+
+        osgiInstallerListener = new OsgiInstallerListener(bundleUrlsToInstall, configUrlsToInstall);
+
+        assertEquals(2, osgiInstallerListener.bundlesLeftToInstall());
+        assertEquals(2, osgiInstallerListener.configsLeftToInstall());
+
+        osgiInstallerListener.onEvent(getInstallationEventMock(bundleUrl1));
+        assertEquals(1, osgiInstallerListener.bundlesLeftToInstall());
+        assertEquals(2, osgiInstallerListener.configsLeftToInstall());
+
+        osgiInstallerListener.onEvent(getInstallationEventMock(bundleUrl2));
+        assertEquals(0, osgiInstallerListener.bundlesLeftToInstall());
+        assertEquals(2, osgiInstallerListener.configsLeftToInstall());
+
+        osgiInstallerListener.onEvent(getInstallationEventMock(configUrl1));
+        assertEquals(0, osgiInstallerListener.bundlesLeftToInstall());
+        assertEquals(1, osgiInstallerListener.configsLeftToInstall());
+
+        osgiInstallerListener.onEvent(getInstallationEventMock(configUrl2));
+        assertEquals(0, osgiInstallerListener.bundlesLeftToInstall());
+        assertEquals(0, osgiInstallerListener.configsLeftToInstall());
+
+    }
+
+    public InstallationEvent getInstallationEventMock(String url) {
+        InstallationEvent event = mock(InstallationEvent.class);
+        when(event.getType()).thenReturn(TYPE.PROCESSED);
+        TaskResource taskResource = mock(TaskResource.class);
+        when(event.getSource()).thenReturn(taskResource);
+        when(taskResource.getURL()).thenReturn(url);
+        when(taskResource.getEntityId()).thenReturn("dummyEntityId");
+        return event;
+    }
 
 }

@@ -36,6 +36,7 @@ import javax.jcr.RepositoryException;
 
 import org.apache.jackrabbit.vault.fs.io.Archive;
 import org.apache.jackrabbit.vault.fs.io.Archive.Entry;
+import org.apache.jackrabbit.vault.packaging.PackageProperties;
 import org.apache.sling.installer.api.InstallableResource;
 import org.apache.sling.installer.provider.installhook.OsgiInstallerHook.BundleInPackage;
 import org.junit.Before;
@@ -47,83 +48,85 @@ import org.mockito.junit.MockitoJUnitRunner;
 @RunWith(MockitoJUnitRunner.class)
 public class OsgiInstallerHookTest {
 
-	OsgiInstallerHook osgiInstallerHook;
-	
-	@Mock
-	Node node;
+    OsgiInstallerHook osgiInstallerHook;
 
-	@Mock
-	Node parentNode;
-	
-	@Mock
-	Property lastModifiedProperty;
-	
-	@Mock
-	Property contentDataProperty;	
+    @Mock
+    Node node;
 
-	@Mock
-	Archive archive;	
-	
-	@Mock
-	Entry entry;	
-	
-	Calendar now;
+    @Mock
+    Node parentNode;
 
-	@Before
-	public void setup() throws RepositoryException  {
-		osgiInstallerHook = new OsgiInstallerHook();
-		
-		now = Calendar.getInstance();
-		when(node.getProperty(OsgiInstallerHook.JCR_CONTENT_LAST_MODIFIED)).thenReturn(lastModifiedProperty);
-		when(lastModifiedProperty.getDate()).thenReturn(now);
-		when(node.getProperty(OsgiInstallerHook.JCR_CONTENT_DATA)).thenReturn(contentDataProperty);
-		when(node.getParent()).thenReturn(parentNode);
-		
-	}
-	
-	@Test
-	public void testConvert() throws IOException, RepositoryException {
-		
-		File pathToTest = new File("/apps/myproj/install/mybundle.jar");
-		when(parentNode.getName()).thenReturn(pathToTest.getParentFile().getName());
-		
-		InstallableResource installableResource = osgiInstallerHook.convert(node, pathToTest.getAbsolutePath());
+    @Mock
+    Property lastModifiedProperty;
 
-		assertEquals(String.valueOf(now.getTimeInMillis()), installableResource.getDigest());
-		assertEquals(pathToTest.getParentFile().getName(), installableResource.getDictionary().get(InstallableResource.INSTALLATION_HINT));
-		
-	}
-	
-	public void testCollectResources() throws IOException, RepositoryException {
-		
-		File pathToTest = new File("/apps/myproj/install.author/myconfig.config");
-		String dirPath = "/jcr_root" + pathToTest.getParentFile().getPath() + "/";
+    @Mock
+    Property contentDataProperty;
 
-		when(entry.getName()).thenReturn(pathToTest.getName());
-		
-		List<BundleInPackage> bundleResources = new ArrayList<BundleInPackage>();
-		List<String> configResources = new ArrayList<String>();
+    @Mock
+    Archive archive;
 
-		osgiInstallerHook.collectResources(archive, entry, dirPath, bundleResources, configResources, 
-				"/apps/other.*", new HashSet<String>(Arrays.asList("author", "dev")));
-				
-		assertTrue(bundleResources.isEmpty());
-		assertTrue(configResources.isEmpty());
+    @Mock
+    PackageProperties packageProperties;
 
-		osgiInstallerHook.collectResources(archive, entry, dirPath, bundleResources, configResources, 
-				"/apps/myproj.*", new HashSet<String>(Arrays.asList("publish", "dev")));
-				
-		assertTrue(bundleResources.isEmpty());
-		assertTrue(configResources.isEmpty());
-		
-		
-		osgiInstallerHook.collectResources(archive, entry, dirPath, bundleResources, configResources, 
-				"/apps/myproj.*", new HashSet<String>(Arrays.asList("author", "dev")));
-		
-		assertTrue(bundleResources.isEmpty());
-		assertEquals(1, configResources.size());
-		assertEquals(pathToTest.getAbsolutePath(), configResources.get(0));
-		
-	}
+    @Mock
+    Entry entry;
+
+    Calendar now;
+
+    @Before
+    public void setup() throws RepositoryException {
+        osgiInstallerHook = new OsgiInstallerHook();
+
+        now = Calendar.getInstance();
+        when(node.getProperty(OsgiInstallerHook.JCR_CONTENT_LAST_MODIFIED)).thenReturn(lastModifiedProperty);
+        when(lastModifiedProperty.getDate()).thenReturn(now);
+        when(node.getProperty(OsgiInstallerHook.JCR_CONTENT_DATA)).thenReturn(contentDataProperty);
+        when(node.getParent()).thenReturn(parentNode);
+
+    }
+
+    @Test
+    public void testConvert() throws IOException, RepositoryException {
+
+        File pathToTest = new File("/apps/myproj/install/mybundle.jar");
+        when(parentNode.getName()).thenReturn(pathToTest.getParentFile().getName());
+
+        InstallableResource installableResource = osgiInstallerHook.convert(node, pathToTest.getAbsolutePath(), packageProperties);
+
+        assertEquals(String.valueOf(now.getTimeInMillis()), installableResource.getDigest());
+        assertEquals(pathToTest.getParentFile().getName(), installableResource.getDictionary().get(InstallableResource.INSTALLATION_HINT));
+
+    }
+
+    public void testCollectResources() throws IOException, RepositoryException {
+
+        File pathToTest = new File("/apps/myproj/install.author/myconfig.config");
+        String dirPath = "/jcr_root" + pathToTest.getParentFile().getPath() + "/";
+
+        when(entry.getName()).thenReturn(pathToTest.getName());
+
+        List<BundleInPackage> bundleResources = new ArrayList<BundleInPackage>();
+        List<String> configResources = new ArrayList<String>();
+
+        osgiInstallerHook.collectResources(archive, entry, dirPath, bundleResources, configResources,
+                "/apps/other.*", new HashSet<String>(Arrays.asList("author", "dev")));
+
+        assertTrue(bundleResources.isEmpty());
+        assertTrue(configResources.isEmpty());
+
+        osgiInstallerHook.collectResources(archive, entry, dirPath, bundleResources, configResources,
+                "/apps/myproj.*", new HashSet<String>(Arrays.asList("publish", "dev")));
+
+        assertTrue(bundleResources.isEmpty());
+        assertTrue(configResources.isEmpty());
+
+        osgiInstallerHook.collectResources(archive, entry, dirPath, bundleResources, configResources,
+                "/apps/myproj.*", new HashSet<String>(Arrays.asList("author", "dev")));
+
+        assertTrue(bundleResources.isEmpty());
+        assertEquals(1, configResources.size());
+        assertEquals(pathToTest.getAbsolutePath(), configResources.get(0));
+
+    }
 
 }

@@ -18,10 +18,10 @@
 */
 package org.apache.sling.installer.provider.installhook;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.sling.installer.api.event.InstallationEvent;
 import org.apache.sling.installer.api.event.InstallationEvent.TYPE;
 import org.apache.sling.installer.api.event.InstallationListener;
@@ -31,57 +31,60 @@ import org.slf4j.LoggerFactory;
 
 public class OsgiInstallerListener implements InstallationListener {
 
-	private static final Logger LOG = LoggerFactory.getLogger(OsgiInstallerListener.class);
+    private static final Logger LOG = LoggerFactory.getLogger(OsgiInstallerListener.class);
 
-	static final String ENTITY_ID_PREFIX_BUNDLE = "bundle:";
-	static final String ENTITY_ID_PREFIX_CONFIG = "config:";
+    private final Set<String> initialBundleUrlsToInstall;
+    private final Set<String> initialConfigUrlsToInstall;
 
-	private final Set<String> requiredBundleSymbolicNames;
-	private final Set<String> requiredConfigPids;
-	private final Set<String> installedBundleSymbolicNames = new HashSet<>();
-	private final Set<String> installedConfigPids = new HashSet<>();
+    private final Set<String> bundleUrlsToInstall;
+    private final Set<String> configUrlsToInstall;
 
-	public OsgiInstallerListener(Set<String> requiredBundleSymbolicNames, Set<String> requiredConfigPids) {
-		this.requiredBundleSymbolicNames = requiredBundleSymbolicNames;
-		this.requiredConfigPids = requiredConfigPids;
-	}
+    public OsgiInstallerListener(Set<String> bundleUrlsToInstall, Set<String> configUrlsToInstall) {
+        this.initialBundleUrlsToInstall = bundleUrlsToInstall;
+        this.initialConfigUrlsToInstall = configUrlsToInstall;
 
-	@Override
-	public void onEvent(InstallationEvent installationEvent) {
-		if (installationEvent.getType() == TYPE.PROCESSED) {
-			Object sourceRaw = installationEvent.getSource();
-			if (!(sourceRaw instanceof TaskResource)) {
-				throw new IllegalStateException("Expected source of type " + TaskResource.class.getName());
-			}
-			TaskResource source = (TaskResource) sourceRaw;
-			String entityId = source.getEntityId();
+        this.bundleUrlsToInstall = Collections.synchronizedSet(new HashSet<>(initialBundleUrlsToInstall));
+        this.configUrlsToInstall = Collections.synchronizedSet(new HashSet<>(initialConfigUrlsToInstall));
+    }
 
-			LOG.debug("Received event about processed entityId {}", entityId);
+    @Override
+    public void onEvent(InstallationEvent installationEvent) {
+        if (installationEvent.getType() == TYPE.PROCESSED) {
+            Object sourceRaw = installationEvent.getSource();
+            if (!(sourceRaw instanceof TaskResource)) {
+                throw new IllegalStateException("Expected source of type " + TaskResource.class.getName());
+            }
+            TaskResource source = (TaskResource) sourceRaw;
+            String entityId = source.getEntityId();
+            String url = source.getURL();
 
-			if (entityId.startsWith(ENTITY_ID_PREFIX_BUNDLE)) {
-				String installedBundleSymbolicName = StringUtils.substringAfter(entityId, ENTITY_ID_PREFIX_BUNDLE);
-				installedBundleSymbolicNames.add(installedBundleSymbolicName);
-			} else if (entityId.startsWith(ENTITY_ID_PREFIX_CONFIG)) {
-				String installedConfigPid = StringUtils.substringAfter(entityId, ENTITY_ID_PREFIX_CONFIG);
-				installedConfigPids.add(installedConfigPid);
-			}
-		}
-	}
+            LOG.trace("Received event about processed entityId={} url={}", entityId, url);
 
-	public boolean isDone() {
-		LOG.trace("requiredBundleSymbolicNames: {}", requiredBundleSymbolicNames);
-		LOG.trace("installedBundleSymbolicNames: {}", installedBundleSymbolicNames);
-		HashSet<String> bundlesLeftToInstall = new HashSet<String>(requiredBundleSymbolicNames);
-		bundlesLeftToInstall.removeAll(installedBundleSymbolicNames);
-		LOG.debug("bundlesLeftToInstall: {}", bundlesLeftToInstall);
+            if (bundleUrlsToInstall.contains(url)) {
+                LOG.debug("Received event for bundle installed with url={}", url);
+                bundleUrlsToInstall.remove(url);
+            }
+            if (configUrlsToInstall.contains(url)) {
+                LOG.debug("Received event for config installed with url={}", url);
+                configUrlsToInstall.remove(url);
+            }
+        }
+    }
 
-		LOG.trace("requiredConfigPids: {}", requiredConfigPids);
-		LOG.trace("installedConfigPids: {}", installedConfigPids);
-		HashSet<String> configsLeftToInstall = new HashSet<String>(requiredConfigPids);
-		configsLeftToInstall.removeAll(installedConfigPids);
-		LOG.debug("configsLeftToInstall: {}", configsLeftToInstall);
+    public int bundlesLeftToInstall() {
+        if (LOG.isTraceEnabled()) {
+            LOG.trace("initialBundleUrlsToInstall: {}", initialBundleUrlsToInstall);
+            LOG.trace("bundleUrlsToInstall: {}", bundleUrlsToInstall);
+        }
+        return bundleUrlsToInstall.size();
+    }
 
-		return bundlesLeftToInstall.isEmpty() && configsLeftToInstall.isEmpty();
-	}
+    public int configsLeftToInstall() {
+        if (LOG.isTraceEnabled()) {
+            LOG.trace("initialConfigUrlsToInstall: {}", initialConfigUrlsToInstall);
+            LOG.trace("configUrlsToInstall: {}", configUrlsToInstall);
+        }
+        return configUrlsToInstall.size();
+    }
 
 }
