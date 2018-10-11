@@ -30,6 +30,7 @@ import java.util.Calendar;
 import java.util.HashSet;
 import java.util.List;
 
+import javax.jcr.Binary;
 import javax.jcr.Node;
 import javax.jcr.Property;
 import javax.jcr.RepositoryException;
@@ -52,6 +53,9 @@ public class OsgiInstallerHookTest {
 
     @Mock
     Node node;
+
+    @Mock
+    Binary binary;
 
     @Mock
     Node parentNode;
@@ -81,6 +85,7 @@ public class OsgiInstallerHookTest {
         when(node.getProperty(OsgiInstallerHook.JCR_CONTENT_LAST_MODIFIED)).thenReturn(lastModifiedProperty);
         when(lastModifiedProperty.getDate()).thenReturn(now);
         when(node.getProperty(OsgiInstallerHook.JCR_CONTENT_DATA)).thenReturn(contentDataProperty);
+        when(contentDataProperty.getBinary()).thenReturn(binary);
         when(node.getParent()).thenReturn(parentNode);
 
     }

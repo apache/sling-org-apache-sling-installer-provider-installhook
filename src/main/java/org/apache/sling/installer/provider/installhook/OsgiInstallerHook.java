@@ -396,7 +396,7 @@ public class OsgiInstallerHook implements InstallHook {
             throws IOException, RepositoryException {
         LOG.trace("Converting {} at path {}", node, path);
         final String digest = String.valueOf(node.getProperty(JCR_CONTENT_LAST_MODIFIED).getDate().getTimeInMillis());
-        final InputStream is = node.getProperty(JCR_CONTENT_DATA).getStream();
+        final InputStream is = node.getProperty(JCR_CONTENT_DATA).getBinary().getStream();
         final Dictionary<String, Object> dict = new Hashtable<String, Object>();
         dict.put(InstallableResource.INSTALLATION_HINT, node.getParent().getName());
         int priority = getNumericPackageProperty(packageProperties, PACKAGE_PROPERTY_INSTALL_PRIORITY, DEFAULT_PRIORITY_INSTALL_HOOK);

@@ -29,7 +29,7 @@ import org.apache.sling.installer.api.tasks.TaskResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OsgiInstallerListener implements InstallationListener {
+class OsgiInstallerListener implements InstallationListener {
 
     private static final Logger LOG = LoggerFactory.getLogger(OsgiInstallerListener.class);
 
