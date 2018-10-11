@@ -20,7 +20,7 @@
     </parent>
 
     <artifactId>org.apache.sling.installer.provider.installhook</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.2-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>Sling Installer Vault Package Install Hook</name>
