@@ -20,11 +20,15 @@ package org.apache.sling.installer.provider.installhook;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.sling.installer.api.event.InstallationEvent;
 import org.apache.sling.installer.api.event.InstallationEvent.TYPE;
 import org.apache.sling.installer.api.event.InstallationListener;
+import org.apache.sling.installer.api.info.Resource;
+import org.apache.sling.installer.api.info.ResourceGroup;
+import org.apache.sling.installer.api.tasks.ResourceState;
 import org.apache.sling.installer.api.tasks.TaskResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,15 +62,31 @@ class OsgiInstallerListener implements InstallationListener {
             String entityId = source.getEntityId();
             String url = source.getURL();
 
-            LOG.trace("Received event about processed entityId={} url={}", entityId, url);
+            LOG.debug("Received event about processed entityId={} url={}", entityId, url);
 
-            if (bundleUrlsToInstall.contains(url)) {
-                LOG.debug("Received event for bundle installed with url={}", url);
-                bundleUrlsToInstall.remove(url);
+            if (bundleUrlsToInstall.remove(url)) {
+                LOG.info("Received bundle installed event url={}", url);
             }
-            if (configUrlsToInstall.contains(url)) {
-                LOG.debug("Received event for config installed with url={}", url);
-                configUrlsToInstall.remove(url);
+            if (configUrlsToInstall.remove(url)) {
+                LOG.info("Received config installed event url={}", url);
+            }
+        }
+    }
+
+    public void updateWith(List<ResourceGroup> installedGroups) {
+        for (ResourceGroup resourceGroup : installedGroups) {
+            List<Resource> resources = resourceGroup.getResources();
+            for (Resource resource : resources) {
+                if (resource.getState() == ResourceState.INSTALLED) {
+                    String url = resource.getURL();
+
+                    if (bundleUrlsToInstall.remove(url)) {
+                        LOG.info("Found bundle in already installed resources url={}", url);
+                    }
+                    if (configUrlsToInstall.remove(url)) {
+                        LOG.info("Found config in already installed resources url={}", url);
+                    }
+                }
             }
         }
     }

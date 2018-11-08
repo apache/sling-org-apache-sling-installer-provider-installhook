@@ -49,12 +49,14 @@ import org.apache.jackrabbit.vault.packaging.PackageProperties;
 import org.apache.jackrabbit.vault.packaging.VaultPackage;
 import org.apache.sling.installer.api.InstallableResource;
 import org.apache.sling.installer.api.OsgiInstaller;
+import org.apache.sling.installer.api.event.InstallationEvent;
 import org.apache.sling.installer.api.event.InstallationListener;
 import org.apache.sling.installer.api.info.InfoProvider;
 import org.apache.sling.installer.api.info.InstallationState;
 import org.apache.sling.installer.api.info.Resource;
 import org.apache.sling.installer.api.info.ResourceGroup;
 import org.apache.sling.installer.api.tasks.ResourceState;
+import org.apache.sling.installer.api.tasks.TaskResource;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
@@ -100,6 +102,13 @@ public class OsgiInstallerHook implements InstallHook {
     public static final String DOT = ".";
 
     InstallHookLogger logger = new InstallHookLogger();
+
+    public OsgiInstallerHook() {
+        LOG.debug("Preloading classes to ensure to not run into a NoClassDefFoundError"
+                + " due to a reloading dynamic classloader: {}, {}, {}, {}",
+                new Object[] { TaskResource.class, InstallationEvent.TYPE.class, ResourceState.class,
+                        InstallerHookOsgiEventListener.class });
+    }
 
     @Override
     public void execute(InstallContext context) throws PackageException {
@@ -190,10 +199,13 @@ public class OsgiInstallerHook implements InstallHook {
                     }
                     logger.log("Waiting for " + bundlesLeftToInstall + " bundles / " + configsLeftToInstall + " configs to be installed");
                     Thread.sleep(1000);
+
+                    // the events are not always reliably received, also update listener explicitly with current installation state
+                    hookInstallationListener.updateWith(infoProvider.getInstallationState().getInstalledResources());
                 }
                 if (bundlesLeftToInstall == 0 && configsLeftToInstall == 0) {
                     logger.log("All " + bundlesToInstallByUrl.size() + " bundles / " + configsToInstallByUrl.size()
-                            + " configs have been successfully installed");
+                            + " configs have been successfully installed in " + (System.currentTimeMillis() - startTime) + "ms");
                 }
 
                 int waitForOsgiEventsQuietInSec = getNumericPackageProperty(packageProperties,
@@ -479,10 +491,8 @@ public class OsgiInstallerHook implements InstallHook {
         public void log(Logger logger, String message) {
             if (listener != null) {
                 listener.onMessage(ProgressTrackerListener.Mode.TEXT, message, "");
-                logger.debug(message);
-            } else {
-                logger.info(message);
             }
+            logger.info(message);
         }
     }
 
