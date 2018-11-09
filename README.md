@@ -6,4 +6,4 @@
 
 This module is part of the [Apache Sling](https://sling.apache.org) project.
 
-Allows to synchronously install bundles and configurations as contained in a vault package. See [https://sling.apache.org/documentation/bundles/installer-provider-installhook.html) for details.
+Allows to synchronously install bundles and configurations as contained in a vault package. See [Sling documentation](https://sling.apache.org/documentation/bundles/installer-provider-installhook.html) for details.
