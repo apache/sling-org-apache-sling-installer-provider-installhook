@@ -20,6 +20,7 @@ package org.apache.sling.installer.provider.installhook;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Dictionary;
@@ -267,7 +268,12 @@ public class OsgiInstallerHook implements InstallHook {
                                 + currentlyActiveBundleVersion + " that matches " + bundle.version + " as provided in package");
                     }
                 } else {
-                    logger.log("Bundle " + bundle.symbolicName + " is not in state INSTALLED but in " + resource.getState());
+                    String msg = MessageFormat.format("Bundle {0} is not in state INSTALLED but in {1}", bundle.symbolicName, resource.getState());
+                    if (StringUtils.isNotEmpty(resource.getError())) {
+                        // related error if there is some
+                        msg += " due to error '" + resource.getError() + "'";
+                    }
+                    logger.log(msg);
                     needsInstallation = true;
                 }
 
