@@ -258,7 +258,7 @@ public class OsgiInstallerHook implements InstallHook {
 
                 if (resource.getState() == ResourceState.INSTALLED) {
                     String currentlyActiveBundleVersion = resource.getVersion().toString();
-                    if (!StringUtils.equals(currentlyActiveBundleVersion, bundle.version)) {
+                    if (!StringUtils.startsWith(currentlyActiveBundleVersion, bundle.version)) {
                         logger.log("Bundle " + bundle.symbolicName + " is installed with version "
                                 + currentlyActiveBundleVersion + " but package contains version " + bundle.version);
                         needsInstallation = true;
