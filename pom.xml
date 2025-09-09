@@ -33,7 +33,7 @@
         <jackrabbit.version>2.10.0</jackrabbit.version>
         <sling.java.version>8</sling.java.version>
         <filevault.version>3.1.18</filevault.version>
-        <jackrabbit.version>2.10.1</jackrabbit.version>
+        <jackrabbit.version>2.22.2</jackrabbit.version>
         <project.build.outputTimestamp>1</project.build.outputTimestamp>
     </properties>
 
